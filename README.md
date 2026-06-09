@@ -2,7 +2,7 @@
 
 Modern conflict resolution for [Jujutsu](https://docs.jj-vcs.dev/).
 
-A low-friction terminal merge editor for **multi-sided conflicts** in Jujutsu, modeled after traditional 3-way merge editor.
+A low-friction terminal merge editor for **multi-sided conflicts** in Jujutsu, modeled after traditional 3-way merge editors.
 
 ![Conflict view demo](./public/conflict-view-demo.png)
 ![Conflict view demo with tabs](./public/conflict-view-demo-tabs.png)
