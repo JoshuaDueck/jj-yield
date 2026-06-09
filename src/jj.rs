@@ -111,19 +111,52 @@ impl Jj {
     }
 }
 
-/// Parse one `jj resolve --list` row. Path and description are separated by a
-/// run of >= 2 spaces (column padding); real paths rarely contain that.
+/// Parse one `jj resolve --list` row.
+///
+/// jj right-pads the path to the width of the longest conflicted path and
+/// separates it from the description with a single space — so the longest path
+/// has just *one* space before its description, and counting spaces is not
+/// enough. Instead we anchor on the description grammar, which is always
+/// `<N>-sided conflict[ including ...]`. This handles paths containing spaces.
 fn parse_list_line(line: &str) -> Option<ConflictEntry> {
     let line = line.trim_end();
     if line.is_empty() {
         return None;
     }
+    if let Some(k) = description_start(line) {
+        let path = line[..k].trim_end().to_string();
+        let description = line[k..].to_string();
+        let sides = parse_sides(&description);
+        return Some(ConflictEntry { path, description, sides });
+    }
+    // Fallback for any unexpected description form: split on a run of >= 2
+    // spaces, otherwise treat the whole line as the path.
     let (path, description) = match line.find("  ") {
         Some(idx) => (line[..idx].to_string(), line[idx..].trim().to_string()),
         None => (line.to_string(), String::new()),
     };
     let sides = parse_sides(&description);
     Some(ConflictEntry { path, description, sides })
+}
+
+/// Index where a `<N>-sided conflict` description begins, if present.
+fn description_start(line: &str) -> Option<usize> {
+    let bytes = line.as_bytes();
+    let anchor = line.find("-sided conflict")?;
+    // Walk back over the side-count digits immediately before "-sided".
+    let mut start = anchor;
+    while start > 0 && bytes[start - 1].is_ascii_digit() {
+        start -= 1;
+    }
+    if start == anchor {
+        return None; // "-sided conflict" not preceded by a number
+    }
+    // Require a word boundary so we don't match inside a path component.
+    if start == 0 || bytes[start - 1].is_ascii_whitespace() {
+        Some(start)
+    } else {
+        None
+    }
 }
 
 /// Extract the leading integer from a description like `3-sided conflict`.
@@ -142,8 +175,32 @@ mod tests {
         assert_eq!(e.description, "3-sided conflict");
         assert_eq!(e.sides, Some(3));
 
+        // The regression: the longest path gets a single-space separator.
+        let e = parse_list_line(
+            "src/features/compliance/ComplianceClientDropdown.tsx 2-sided conflict",
+        )
+        .unwrap();
+        assert_eq!(
+            e.path,
+            "src/features/compliance/ComplianceClientDropdown.tsx"
+        );
+        assert_eq!(e.description, "2-sided conflict");
+        assert_eq!(e.sides, Some(2));
+
+        // Padded short path alongside a longer one.
+        let e = parse_list_line("short.txt                    2-sided conflict").unwrap();
+        assert_eq!(e.path, "short.txt");
+        assert_eq!(e.sides, Some(2));
+
+        // Description variant with deletions.
+        let e = parse_list_line("f.txt    2-sided conflict including 1 deletion").unwrap();
+        assert_eq!(e.path, "f.txt");
+        assert_eq!(e.description, "2-sided conflict including 1 deletion");
+        assert_eq!(e.sides, Some(2));
+
+        // Path that itself contains spaces.
         let e = parse_list_line("src/a b.rs    2-sided conflict").unwrap();
-        assert_eq!(e.path, "src/a b.rs"); // single spaces in path are preserved
+        assert_eq!(e.path, "src/a b.rs");
         assert_eq!(e.sides, Some(2));
 
         assert!(parse_list_line("").is_none());
