@@ -1,0 +1,10 @@
+line1
+<<<<<<< conflict 1 of 1
++++++++ wqzmttwt 85fd3753 "Alice: rename var"
+AAA
+------- uqrqypor 9d18bf1d "base"
+shared
++++++++ kkqkuwqm 753ef967 "Bob: inline call"
+BBB
+>>>>>>> conflict 1 of 1 ends
+line3

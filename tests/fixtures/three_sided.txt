@@ -1,0 +1,14 @@
+line1
+<<<<<<< conflict 1 of 1
++++++++ lwoqkvks 0a5b434a "Alice"
+AAA
+------- skwmvqyp faa8b1c2 "base"
+shared
++++++++ nwmpsqzl 6d86dc26 "Bob"
+BBB
+------- skwmvqyp faa8b1c2 "base"
+shared
++++++++ vqvroppq 06ca053f "Carol"
+CCC
+>>>>>>> conflict 1 of 1 ends
+line3

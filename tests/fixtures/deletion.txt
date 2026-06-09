@@ -1,0 +1,11 @@
+line1
+<<<<<<< conflict 1 of 1
++++++++ zmpnlooo c46d62fd "Alice deletes block"
+------- krkolkqy c5107834 "base"
+X
+Y
++++++++ kxyruotl 669856ba "Bob edits block"
+XX
+YY
+>>>>>>> conflict 1 of 1 ends
+line4

@@ -1,0 +1,19 @@
+a
+<<<<<<< conflict 1 of 2
++++++++ ntrzsowr 35a6f9dd "Alice"
+B1
+------- uwznnksw b07592ec "base"
+b
++++++++ tnyszuxk 436a060b "Bob"
+B2
+>>>>>>> conflict 1 of 2 ends
+c
+<<<<<<< conflict 2 of 2
++++++++ ntrzsowr 35a6f9dd "Alice"
+D1
+------- uwznnksw b07592ec "base"
+d
++++++++ tnyszuxk 436a060b "Bob"
+D2
+>>>>>>> conflict 2 of 2 ends
+e

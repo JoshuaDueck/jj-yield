@@ -1,0 +1,19 @@
+[package]
+name = "jj-yield"
+version = "0.1.0"
+edition = "2021"
+description = "A TUI for comparing and resolving multi-sided Jujutsu conflicts (snapshot marker style)."
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["jujutsu", "jj", "conflict", "merge", "tui"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+# `crossterm` is re-exported as `ratatui::crossterm`, so a single dependency keeps
+# the backend version in lockstep with ratatui.
+ratatui = "0.29"
+anyhow = "1"
+
+[profile.release]
+strip = true
+lto = true
