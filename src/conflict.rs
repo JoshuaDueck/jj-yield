@@ -153,6 +153,16 @@ pub enum Segment {
     Conflict(ConflictRegion),
 }
 
+/// How a conflict region has been resolved. Column indices refer to
+/// [`ConflictRegion::columns`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Accept {
+    /// Take a single side/base.
+    Side(usize),
+    /// Take several columns concatenated in the given order ("accept both").
+    Both(Vec<usize>),
+}
+
 /// A fully parsed materialized file.
 #[derive(Debug, Clone)]
 pub struct ParsedFile {
@@ -181,20 +191,17 @@ impl ParsedFile {
         self.regions().nth(idx)
     }
 
-    /// Reassemble the file text. `resolutions[i]` is the chosen column index for
+    /// Reassemble the file text. `resolutions[i]` is the [`Accept`] choice for
     /// region `i`; `None` re-emits the original conflict markers verbatim.
-    pub fn render(&self, resolutions: &[Option<usize>]) -> String {
+    pub fn render(&self, resolutions: &[Option<Accept>]) -> String {
         let mut out: Vec<String> = Vec::new();
         let mut region_idx = 0;
         for seg in &self.segments {
             match seg {
                 Segment::Context(lines) => out.extend(lines.iter().cloned()),
                 Segment::Conflict(region) => {
-                    match resolutions.get(region_idx).copied().flatten() {
-                        Some(col_idx) => match region.columns().get(col_idx) {
-                            Some(col) => out.extend(col.content.iter().cloned()),
-                            None => out.extend(region.raw.iter().cloned()),
-                        },
+                    match resolutions.get(region_idx).and_then(|o| o.as_ref()) {
+                        Some(accept) => emit_accept(region, accept, &mut out),
                         None => out.extend(region.raw.iter().cloned()),
                     }
                     region_idx += 1;
@@ -209,8 +216,28 @@ impl ParsedFile {
     }
 
     /// True when every conflict region has a chosen resolution.
-    pub fn fully_resolved(&self, resolutions: &[Option<usize>]) -> bool {
+    pub fn fully_resolved(&self, resolutions: &[Option<Accept>]) -> bool {
         let total = self.region_count();
-        total > 0 && (0..total).all(|i| resolutions.get(i).copied().flatten().is_some())
+        total > 0 && (0..total).all(|i| resolutions.get(i).map(Option::is_some).unwrap_or(false))
+    }
+}
+
+/// Append the content selected by `accept` for `region` to `out`. Falls back to
+/// the raw markers if the choice references no valid columns.
+fn emit_accept(region: &ConflictRegion, accept: &Accept, out: &mut Vec<String>) {
+    let cols = region.columns();
+    let chosen: Vec<usize> = match accept {
+        Accept::Side(i) => vec![*i],
+        Accept::Both(idxs) => idxs.clone(),
+    };
+    let mut emitted = false;
+    for i in chosen {
+        if let Some(col) = cols.get(i) {
+            out.extend(col.content.iter().cloned());
+            emitted = true;
+        }
+    }
+    if !emitted {
+        out.extend(region.raw.iter().cloned());
     }
 }

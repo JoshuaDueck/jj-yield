@@ -1,7 +1,7 @@
 //! Parser tests against fixtures captured from real `jj file show
 //! --config ui.conflict-marker-style=snapshot` output (jj 0.42).
 
-use jj_yield::conflict::{Segment, TermKind};
+use jj_yield::conflict::{Accept, Segment, TermKind};
 use jj_yield::parser::parse;
 
 fn fixture(name: &str) -> String {
@@ -99,7 +99,7 @@ fn picking_a_side_replaces_the_region() {
     let text = fixture("two_sided.txt");
     let parsed = parse(&text);
     // Resolve region 0 to column 0 (Alice => "AAA").
-    let rendered = parsed.render(&[Some(0)]);
+    let rendered = parsed.render(&[Some(Accept::Side(0))]);
     assert_eq!(rendered, "line1\nAAA\nline3\n");
     assert!(!rendered.contains("<<<<<<<"));
     assert!(!rendered.contains("+++++++"));
@@ -109,6 +109,18 @@ fn picking_a_side_replaces_the_region() {
 fn picking_base_in_three_sided() {
     let parsed = parse(&fixture("three_sided.txt"));
     // Column 1 is the base ("shared").
-    let rendered = parsed.render(&[Some(1)]);
+    let rendered = parsed.render(&[Some(Accept::Side(1))]);
     assert_eq!(rendered, "line1\nshared\nline3\n");
+}
+
+#[test]
+fn accept_both_concatenates_in_order() {
+    let parsed = parse(&fixture("two_sided.txt"));
+    // Columns: 0 = Alice ("AAA"), 1 = base ("shared"), 2 = Bob ("BBB").
+    let rendered = parsed.render(&[Some(Accept::Both(vec![0, 2]))]);
+    assert_eq!(rendered, "line1\nAAA\nBBB\nline3\n");
+
+    // Reversed order is honored.
+    let rendered = parsed.render(&[Some(Accept::Both(vec![2, 0]))]);
+    assert_eq!(rendered, "line1\nBBB\nAAA\nline3\n");
 }

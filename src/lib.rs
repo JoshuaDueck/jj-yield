@@ -7,6 +7,8 @@
 
 pub mod app;
 pub mod conflict;
+pub mod diff;
+pub mod highlight;
 pub mod jj;
 pub mod parser;
 pub mod ui;
