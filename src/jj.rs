@@ -40,7 +40,9 @@ impl Jj {
         if root.is_empty() {
             bail!("`jj root` returned an empty path");
         }
-        Ok(Jj { root: PathBuf::from(root) })
+        Ok(Jj {
+            root: PathBuf::from(root),
+        })
     }
 
     fn cmd(&self) -> Command {
@@ -77,6 +79,7 @@ impl Jj {
 
     /// Materialize `path` at `@` using snapshot conflict markers.
     pub fn materialize(&self, path: &str) -> Result<String> {
+        let pattern = fileset(path);
         let out = self
             .cmd()
             .args([
@@ -87,7 +90,7 @@ impl Jj {
                 "-r",
                 "@",
                 "--",
-                path,
+                pattern.as_str(),
             ])
             .output()
             .with_context(|| format!("failed to run `jj file show` for {path}"))?;
@@ -127,7 +130,11 @@ fn parse_list_line(line: &str) -> Option<ConflictEntry> {
         let path = line[..k].trim_end().to_string();
         let description = line[k..].to_string();
         let sides = parse_sides(&description);
-        return Some(ConflictEntry { path, description, sides });
+        return Some(ConflictEntry {
+            path,
+            description,
+            sides,
+        });
     }
     // Fallback for any unexpected description form: split on a run of >= 2
     // spaces, otherwise treat the whole line as the path.
@@ -136,7 +143,11 @@ fn parse_list_line(line: &str) -> Option<ConflictEntry> {
         None => (line.to_string(), String::new()),
     };
     let sides = parse_sides(&description);
-    Some(ConflictEntry { path, description, sides })
+    Some(ConflictEntry {
+        path,
+        description,
+        sides,
+    })
 }
 
 /// Index where a `<N>-sided conflict` description begins, if present.
@@ -162,6 +173,18 @@ fn description_start(line: &str) -> Option<usize> {
 /// Extract the leading integer from a description like `3-sided conflict`.
 fn parse_sides(description: &str) -> Option<usize> {
     description.split('-').next()?.trim().parse().ok()
+}
+
+/// Build a jj *fileset* argument matching exactly `path` (repo-root-relative).
+///
+/// jj parses bare path arguments as fileset expressions, so `(`, `)`, `|`, `&`,
+/// `~` and spaces act as operators — a path like `app/(authenticated)/x.tsx`
+/// fails to parse. Wrapping it in the `root-file:"..."` file pattern makes jj
+/// treat it as one exact, literal file. The quoted string uses jj's normal
+/// escaping, so we escape backslashes and double quotes within the path.
+fn fileset(path: &str) -> String {
+    let escaped = path.replace('\\', "\\\\").replace('"', "\\\"");
+    format!("root-file:\"{escaped}\"")
 }
 
 #[cfg(test)]
@@ -204,5 +227,16 @@ mod tests {
         assert_eq!(e.sides, Some(2));
 
         assert!(parse_list_line("").is_none());
+    }
+
+    #[test]
+    fn fileset_wraps_paths_with_special_chars() {
+        // Parentheses (and other fileset operators) must not be parsed by jj.
+        assert_eq!(
+            fileset("mido/app/(authenticated)/x.tsx"),
+            "root-file:\"mido/app/(authenticated)/x.tsx\""
+        );
+        // Backslashes and quotes are escaped for jj's string literal syntax.
+        assert_eq!(fileset(r#"a"b\c"#), r#"root-file:"a\"b\\c""#);
     }
 }

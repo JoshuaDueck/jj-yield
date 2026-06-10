@@ -1,7 +1,7 @@
 //! `ratatui` rendering for the merge-editor view. Pure view over
 //! [`crate::app::App`] — no mutation.
 
-use crate::app::{side_title, App, ResultKind, ResultLine, SideView, SidesLayout};
+use crate::app::{side_title, App, FileListLayout, ResultKind, ResultLine, SideView, SidesLayout};
 use crate::conflict::{Accept, TermKind};
 use crate::diff::{DiffTag, Word};
 use crate::highlight::Seg;
@@ -21,9 +21,17 @@ const DELETE_BG: Color = Color::Rgb(46, 26, 30);
 
 pub fn draw(f: &mut Frame, app: &App) {
     let area = f.area();
+
+    let file_list_constraint = match app.file_list_layout {
+        FileListLayout::Full => Constraint::Percentage(22),
+        FileListLayout::Short => Constraint::Percentage(15),
+        FileListLayout::Mini => Constraint::Percentage(5),
+        FileListLayout::None => Constraint::Percentage(0),
+    };
+
     let cols = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(22), Constraint::Min(30)])
+        .constraints([file_list_constraint, Constraint::Min(30)])
         .split(area);
 
     draw_file_list(f, app, cols[0]);
@@ -59,7 +67,11 @@ fn draw_file_list(f: &mut Frame, app: &App, area: Rect) {
             } else {
                 ("  ", Color::DarkGray)
             };
-            let sides = fs.entry.sides.map(|n| format!("  [{n}]")).unwrap_or_default();
+            let sides = fs
+                .entry
+                .sides
+                .map(|n| format!("  [{n}]"))
+                .unwrap_or_default();
             ListItem::new(Line::from(vec![
                 Span::styled(mark, Style::default().fg(color)),
                 Span::raw(fs.entry.path.clone()),
@@ -71,7 +83,10 @@ fn draw_file_list(f: &mut Frame, app: &App, area: Rect) {
     let list = List::new(items)
         .block(Block::default().borders(Borders::ALL).title(" Conflicts "))
         .highlight_style(
-            Style::default().bg(Color::Blue).fg(Color::White).add_modifier(Modifier::BOLD),
+            Style::default()
+                .bg(Color::Blue)
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
         )
         .highlight_symbol("› ");
     let mut state = ListState::default();
@@ -97,10 +112,17 @@ fn draw_header(f: &mut Frame, app: &App, area: Rect) {
         }
         None => (" jj-yield ".to_string(), "no conflicts".to_string()),
     };
-    let p = Paragraph::new(Line::from(Span::styled(info, Style::default().fg(Color::Gray)))).block(
+    let p = Paragraph::new(Line::from(Span::styled(
+        info,
+        Style::default().fg(Color::Gray),
+    )))
+    .block(
         Block::default()
             .borders(Borders::ALL)
-            .title(Line::from(Span::styled(title, Style::default().add_modifier(Modifier::BOLD)))),
+            .title(Line::from(Span::styled(
+                title,
+                Style::default().add_modifier(Modifier::BOLD),
+            ))),
     );
     f.render_widget(p, area);
 }
@@ -135,7 +157,9 @@ fn draw_sides(f: &mut Frame, app: &App, area: Rect) {
             "No conflict region in this file."
         };
         f.render_widget(
-            Paragraph::new(msg).block(Block::default().borders(Borders::ALL)).wrap(Wrap { trim: true }),
+            Paragraph::new(msg)
+                .block(Block::default().borders(Borders::ALL))
+                .wrap(Wrap { trim: true }),
             area,
         );
         return;
@@ -167,18 +191,39 @@ fn draw_sides(f: &mut Frame, app: &App, area: Rect) {
                 if i == app.focused_side {
                     st = st.add_modifier(Modifier::REVERSED | Modifier::BOLD);
                 }
-                let chosen = if is_chosen(app, side.col_index) { "✓" } else { "" };
-                spans.push(Span::styled(format!(" {}{} {} ", i + 1, chosen, side_title(side)), st));
+                let chosen = if is_chosen(app, side.col_index) {
+                    "✓"
+                } else {
+                    ""
+                };
+                spans.push(Span::styled(
+                    format!(" {}{} {} ", i + 1, chosen, side_title(side)),
+                    st,
+                ));
                 spans.push(Span::raw(" "));
             }
             f.render_widget(Paragraph::new(Line::from(spans)), rows[0]);
             let side = &app.sides[app.focused_side];
-            draw_side_pane(f, app, side, app.focused_side, accent[app.focused_side], rows[1]);
+            draw_side_pane(
+                f,
+                app,
+                side,
+                app.focused_side,
+                accent[app.focused_side],
+                rows[1],
+            );
         }
     }
 }
 
-fn draw_side_pane(f: &mut Frame, app: &App, side: &SideView, idx: usize, accent: Color, area: Rect) {
+fn draw_side_pane(
+    f: &mut Frame,
+    app: &App,
+    side: &SideView,
+    idx: usize,
+    accent: Color,
+    area: Rect,
+) {
     let focused = idx == app.focused_side;
     let chosen = is_chosen(app, side.col_index);
     let border_style = if focused {
@@ -223,8 +268,18 @@ fn side_body_lines(side: &SideView) -> Vec<Line<'static>> {
                     .and_then(|i| side.hl.get(i))
                     .map(|v| v.as_slice())
                     .unwrap_or(&[]);
-                let line_bg = if dl.tag == DiffTag::Insert { Some(INSERT_BG) } else { None };
-                out.push(styled_diff_line(&dl.text, segs, &dl.words, line_bg, Some(INSERT_EMPH_BG)));
+                let line_bg = if dl.tag == DiffTag::Insert {
+                    Some(INSERT_BG)
+                } else {
+                    None
+                };
+                out.push(styled_diff_line(
+                    &dl.text,
+                    segs,
+                    &dl.words,
+                    line_bg,
+                    Some(INSERT_EMPH_BG),
+                ));
             }
         }
     }
@@ -312,7 +367,9 @@ fn draw_result(f: &mut Frame, app: &App, area: Rect) {
                 .borders(Borders::ALL)
                 .title(Line::from(Span::styled(
                     " Result ",
-                    Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::Magenta)
+                        .add_modifier(Modifier::BOLD),
                 ))),
         )
         .scroll((app.result_scroll, 0));
@@ -329,7 +386,10 @@ fn result_line(rl: &ResultLine, is_current: bool) -> Line<'static> {
     match rl.kind {
         ResultKind::Marker => {
             let text: String = rl.segs.iter().map(|s| s.text.as_str()).collect();
-            spans.push(Span::styled(text, Style::default().fg(DELETE_FG).add_modifier(Modifier::DIM)));
+            spans.push(Span::styled(
+                text,
+                Style::default().fg(DELETE_FG).add_modifier(Modifier::DIM),
+            ));
         }
         ResultKind::Context | ResultKind::Resolved => {
             for seg in &rl.segs {
@@ -347,7 +407,9 @@ fn draw_footer(f: &mut Frame, app: &App, area: Rect) {
         Line::from(vec![
             Span::styled(
                 app.status.as_str(),
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
             ),
             Span::styled("   ·   ", Style::default().fg(Color::DarkGray)),
             Span::styled(HINTS, Style::default().fg(Color::DarkGray)),
@@ -389,7 +451,9 @@ fn draw_help(f: &mut Frame, area: Rect) {
             if v.is_empty() {
                 Line::from(Span::styled(
                     *k,
-                    Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::Magenta)
+                        .add_modifier(Modifier::BOLD),
                 ))
             } else {
                 Line::from(vec![

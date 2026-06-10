@@ -25,6 +25,14 @@ pub enum SidesLayout {
     Tabbed,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileListLayout {
+    Full,
+    Short,
+    Mini,
+    None,
+}
+
 /// State for one conflicted file.
 pub struct FileState {
     pub entry: ConflictEntry,
@@ -85,6 +93,7 @@ pub struct App {
     pub focused_side: usize,
     pub vscroll: u16,
     pub sides_layout: SidesLayout,
+    pub file_list_layout: FileListLayout,
     pub status: String,
     pub show_help: bool,
     pub pending_g: bool,
@@ -106,6 +115,7 @@ impl App {
             focused_side: 0,
             vscroll: 0,
             sides_layout: SidesLayout::SideBySide,
+            file_list_layout: FileListLayout::Full,
             status: String::new(),
             show_help: false,
             pending_g: false,
@@ -127,11 +137,19 @@ impl App {
             let text = self.jj.materialize(&entry.path)?;
             let parsed = parser::parse(&text);
             let resolutions = vec![None; parsed.region_count()];
-            files.push(FileState { entry, parsed, resolutions });
+            files.push(FileState {
+                entry,
+                parsed,
+                resolutions,
+            });
         }
         self.files = files;
         if let Some(p) = prev_path {
-            self.selected_file = self.files.iter().position(|f| f.entry.path == p).unwrap_or(0);
+            self.selected_file = self
+                .files
+                .iter()
+                .position(|f| f.entry.path == p)
+                .unwrap_or(0);
         }
         self.clamp_selection();
         self.rebuild_view();
@@ -170,7 +188,11 @@ impl App {
 
     fn max_side_scroll(&self) -> u16 {
         let h = self.sides.iter().map(|s| s.diff.len()).max().unwrap_or(0);
-        if h == 0 { 0 } else { (h.saturating_sub(1)) as u16 }
+        if h == 0 {
+            0
+        } else {
+            (h.saturating_sub(1)) as u16
+        }
     }
 
     // ---- view derivation -------------------------------------------------
@@ -224,7 +246,13 @@ impl App {
                     });
                 }
             }
-            (sides, ResultView { lines, region_start })
+            (
+                sides,
+                ResultView {
+                    lines,
+                    region_start,
+                },
+            )
         };
 
         let region_line = result.region_start.get(self.region).copied().unwrap_or(0);
@@ -249,7 +277,11 @@ impl App {
             self.selected_file = self.files.len() - 1;
         }
         let regions = self.region_count();
-        self.region = if regions == 0 { 0 } else { self.region.min(regions - 1) };
+        self.region = if regions == 0 {
+            0
+        } else {
+            self.region.min(regions - 1)
+        };
     }
 
     // ---- navigation ------------------------------------------------------
@@ -317,6 +349,15 @@ impl App {
         };
     }
 
+    fn toggle_file_list_layout(&mut self) {
+        self.file_list_layout = match self.file_list_layout {
+            FileListLayout::Full => FileListLayout::Short,
+            FileListLayout::Short => FileListLayout::Mini,
+            FileListLayout::Mini => FileListLayout::None,
+            FileListLayout::None => FileListLayout::Full,
+        }
+    }
+
     // ---- resolution ------------------------------------------------------
 
     fn set_accept(&mut self, accept: Option<Accept>) {
@@ -330,7 +371,9 @@ impl App {
 
     /// Accept the column at side-pane index `i` (focused side, or numbered key).
     fn accept_side_at(&mut self, i: usize) {
-        let Some(side) = self.sides.get(i) else { return };
+        let Some(side) = self.sides.get(i) else {
+            return;
+        };
         let col = side.col_index;
         let title = side_title(side);
         self.focused_side = i;
@@ -356,7 +399,11 @@ impl App {
     }
 
     fn accept_base(&mut self) {
-        let base = self.sides.iter().find(|s| s.kind == TermKind::Remove).map(|s| s.col_index);
+        let base = self
+            .sides
+            .iter()
+            .find(|s| s.kind == TermKind::Remove)
+            .map(|s| s.col_index);
         match base {
             Some(col) => {
                 self.set_accept(Some(Accept::Side(col)));
@@ -462,6 +509,7 @@ impl App {
             KeyCode::Char('u') => self.unresolve(),
 
             KeyCode::Char('m') => self.toggle_layout(),
+            KeyCode::Char('s') => self.toggle_file_list_layout(),
             KeyCode::Char('w') => self.write(),
             KeyCode::Char('e') => return Action::OpenEditor,
             KeyCode::Char('r') => {
